@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\IpUtils;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
+
 
 
 class AuthenticatedSessionController extends Controller
@@ -28,6 +30,17 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
+        // Rate limit the login attempts to 3 times in 30 seconds
+        $key = $request->ip();
+        $maxAttempts = 3;
+        $decaySeconds = 30;
+        RateLimiter::hit($key, $decaySeconds);
+
+        if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
+            $seconds = RateLimiter::availableIn($key);
+            return redirect()->back()->with('status', 'Too many login attempts. Please try again in '.$seconds.' seconds.');
+        }
+        
         $recaptcha_response = $request->input('g-recaptcha-response');
 
         if (is_null($recaptcha_response)) {
@@ -54,6 +67,9 @@ class AuthenticatedSessionController extends Controller
         } else {
             return redirect()->back()->with('status', 'Please Complete the Recaptcha Again to proceed');
         }
+
+        
+
     }
 
     /**
